@@ -1,4 +1,4 @@
-name: "Build ISOs and create GitHub Release draft for new versions"
+name: "Build images and create GitHub Release draft for new versions"
 
 on: # Only run on new version tag push
   push:
