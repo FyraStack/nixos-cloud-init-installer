@@ -1,8 +1,8 @@
 name: "Build images and create GitHub Release draft for new versions"
 
-on: # Only run on new version tag push
+on:
   push:
-    tags:        
+    tags:
       - v*
 
 permissions:
@@ -24,14 +24,17 @@ jobs:
       - name: "Install Nix"
         uses: cachix/install-nix-action@v31
         with:
-          nix_path: nixpkgs=channel:26.05 # Change me on NixOS upgrades!
-      - name: Build ISO images
+          nix_path: nixpkgs=channel:26.05
+          extra_nix_config: |
+            system-features = nixos-test benchmark big-parallel kvm uid-range
+      - name: Build images
         run: >
-          nix run github:nixos/nixpkgs/nixos-unstable#nixos-rebuild -- build-image --image-variant qemu-efi --flake .#${{ matrix.architecture }}
-      - name: Copy and rename generated ISO file to reflect version and architecture
+          nix run github:nixos/nixpkgs/nixos-unstable#nixos-rebuild --
+          build-image --image-variant qemu-efi --flake .#${{ matrix.architecture }}
+      - name: Copy and rename generated qcow2 file to reflect version and architecture
         run: |
-          REAL_ISO_FILENAME=$(readlink -f $(find result/ -name "nixos-*.qcow2" -print -quit))
-          cp "$REAL_ISO_FILENAME" \
+          REAL_QCOW2_FILENAME=$(readlink -f $(find result/ -name "nixos-*.qcow2" -print -quit))
+          cp "$REAL_QCOW2_FILENAME" \
             nixos-cloud-init-installer-${{ github.ref_name }}-${{ matrix.architecture }}.qcow2
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
@@ -45,11 +48,11 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
-          path: iso-artifacts
-          pattern: iso-artifact-*
+          path: qcow2-artifacts
+          pattern: qcow2-artifact-*
           merge-multiple: true
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           draft: true
-          files: iso-artifacts/*.iso
+          files: qcow2-artifacts/*.qcow2
