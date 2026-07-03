@@ -1,73 +1,130 @@
 # nixos-cloud-init-installer
-A minimal NixOS flake with cloud-init designed for use as an installer ISO image for provisioning virtual machines
 
-This was designed to be used to provision new NixOS virtual machines on a Proxmox host (via QEMU/KVM), while allowing the dynamic configuration of disks and other hardware. However, this should also support other hypervisors, including VirtualBox, Hyper-V, Xen, and VMWare.
+A minimal x86_64 NixOS cloud image for Proxmox with cloud-init support.
 
-There exist pre-built ISO images that you are able to download, for both x86_64 and aarch64, in this repository's releases. 
+This image is intended to be used like a Fedora Cloud image: build a reusable UEFI QCOW2 base image, import it into Proxmox, attach a Proxmox cloud-init drive, and provision the VM at first boot through cloud-init.
 
-**NOTE:** SSH login via password is disabled, for security reasons! Instead, it is recommended to pass public SSH keys to NixOS via cloud-init when using this installer. However, for ease of installation, no password is required to use sudo.
+## Image defaults
 
-## Steps to build this image yourself:
+- Architecture: `x86_64-linux`
+- Firmware: UEFI/OVMF
+- Disk format: QCOW2 by default; release builds use compressed QCOW2
+- Hypervisor target: Proxmox/QEMU/KVM
+- Cloud-init datasource: `NoCloud`, which is what Proxmox cloud-init uses
+- Network renderer: `systemd-networkd`
+- Guest agent: QEMU guest agent enabled
+- Root filesystem: ext4 with grow-on-boot support
+- SSH: OpenSSH enabled; root login policy is intended to be controlled by cloud-init data. By default, NixOS permits root login with SSH keys but not passwords. The image includes `/etc/ssh/sshd_config.d/*.conf` from `sshd_config` so cloud-init can write per-VM SSH policy snippets.
 
-This assumes that you have Nix installed on your system, with flakes and nix-commands enabled.
+The image intentionally keeps the package set small. It includes `cloud-init`, `curl`, `nano`, and `vim`.
 
-1. First, clone this Git repository.
-2. Then, you can run one of these commands based on the architecture that you want to target:
+## Build
 
-**x86_64 (Intel/AMD):**
+This assumes Nix is installed with flakes and `nix-command` enabled.
+
 ```bash
-nix run github:nixos/nixpkgs/nixos-unstable#nixos-rebuild -- \
-  build-image --image-variant qemu-efi --flake .#x86_64
+nix build .#qcow2
 ```
 
-**aarch64 (ARM64):**
+The default QCOW2 output is not internally compressed, which is faster and better for normal development/provisioning workflow runs.
+
+For a smaller release artifact, build the compressed QCOW2 output:
+
 ```bash
-nix run github:nixos/nixpkgs/nixos-unstable#nixos-rebuild -- \
-  build-image --image-variant qemu-efi --flake .#aarch64
+nix build .#qcow2-compressed
 ```
 
-After building, your image should be in the `result/iso/` directory, being named something in the vein of `nixos-minimal-26.05-DATE-HASH-ARCHITECTURE-linux.iso`.
+The resulting image will be available under `result/`, with a filename similar to:
 
-### Notice for cross-compiling images
-If building an image for an architecture different to the native architecture of the build host, you will need to configure Nix accordingly.
+```text
+nixos-cloud-proxmox-26.05.DATE.HASH-x86_64.qcow2
+```
 
-Firstly, you will need to add the target architecture to your list of extra platforms on Nix.
+You can also build the native Proxmox VMA backup artifact exposed by nixpkgs' Proxmox image module:
 
-For NixOS, you just need to add this line to your configuration file: `boot.binfmt.emulatedSystems = [ "ARCHITECTURE_NAME" ];`
+```bash
+nix build .#vma
+```
 
-For non-NixOS systems, you just need to add this line to `nix.conf`: `extra-platforms = ARCHITECTURE_NAME`
+## Example Proxmox import flow
 
-**Example for an x86_64 build system targeting aarch64:**
-- `extra-platforms = aarch64-linux`
+The exact storage names and VM IDs depend on your Proxmox environment. This example imports the QCOW2 as a template VM.
 
-Furthermore, on non-NixOS systems, you will need QEMU installed, particularly the `qemu-system` and `qemu-efi` for your target architecture, as well as `binfmt-support` and `qemu-user-static`. This will allow you to run the binaries of your target architecture that are necessary for building the image with that architecture.
+```bash
+qm create 9000 \
+  --name nixos-cloud \
+  --memory 1024 \
+  --cores 1 \
+  --net0 virtio,bridge=vmbr0,firewall=1 \
+  --ostype l26 \
+  --bios ovmf \
+  --machine q35 \
+  --efidisk0 local-lvm:0,efitype=4m,pre-enrolled-keys=0 \
+  --agent enabled=1 \
+  --serial0 socket \
+  --vga serial0
 
-**Example apt command for Ubuntu on x86_64, for compiling as aarch64:**
-- `sudo apt install qemu-system-aarch64 qemu-efi-aarch64 binfmt-support qemu-user-static` 
+qm importdisk 9000 result/nixos-cloud-proxmox-*.qcow2 local-lvm
+qm set 9000 --scsihw virtio-scsi-single --virtio0 local-lvm:vm-9000-disk-0
+qm set 9000 --ide2 local-lvm:cloudinit
+qm set 9000 --boot order=virtio0
+qm template 9000
+```
 
-**NOTE:** As this approach uses emulation (with QEMU), build time is significantly increased, compared to native builds.
+For clones, provide cloud-init data through Proxmox, for example with `qm set` or your provider's provisioning layer.
 
-## Example workflow with Ansible on Proxmox
-**1. Building or retrieving the ISO image**
+If your provisioning workflow resizes the VM disk after cloning, the image is prepared for that: the Proxmox image module enables partition growth and root filesystem auto-resize on boot.
 
-Ansible can either build an ISO image (with the commands above), or download the latest release from GitHub.
+## Example cloud-init user data
 
-**2. Uploading the ISO image to Proxmox**
+Root login policy should be decided by your provisioning layer per VM.
 
-The ISO image is then uploaded to Proxmox storage (accessible by the target node).
+For root SSH key login, the base image defaults are enough:
 
-**3. Provisioning a new virtual machine**
+```yaml
+#cloud-config
+disable_root: false
+users:
+  - name: root
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAA... user@example
+```
 
-Using the information from the playbook's inventory, as well as other provided variables, Ansible requests that Proxmox provision a new virtual machine. Furthermore, it attaches a cloud-init drive, providing credentials (e.g. SSH keys) and networking details needed by nixos-anywhere.
+For root password SSH login, set the root password and explicitly override sshd for that VM. Use hashed passwords in production when possible.
 
-**4. Booting the virtual machine with the ISO image and cloud-init**
+```yaml
+#cloud-config
+ssh_pwauth: true
+disable_root: false
+chpasswd:
+  expire: false
+  users:
+    - name: root
+      password: "$6$rounds=4096$exampleSalt$replace-with-a-real-sha512-crypt-hash"
+write_files:
+  - path: /etc/ssh/sshd_config.d/90-cloud-init-root-login.conf
+    permissions: '0644'
+    content: |
+      PermitRootLogin yes
+runcmd:
+  - systemctl reload sshd
+```
 
-After the virtual machine is ready to start, Ansible boots the virtual machine, waiting until it can establish an SSH connection. Once NixOS is booted, cloud-init injects the listed credentials and details, allowing for unattended setup and SSH access.
+To explicitly disable root SSH login for a VM:
 
-**5. Initiating the install with nixos-anywhere**
+```yaml
+#cloud-config
+write_files:
+  - path: /etc/ssh/sshd_config.d/90-cloud-init-root-login.conf
+    permissions: '0644'
+    content: |
+      PermitRootLogin no
+runcmd:
+  - systemctl reload sshd
+```
 
-With SSH ready, Ansible then runs nixos-anywhere, using the provided SSH key and a NixOS flake configuration, to then remotely install NixOS onto the virtual machine's disk. After this, NixOS should reboot into the new system.
+## Notes
 
-**6. Post-installation**
-
-With NixOS completely installed on the virtual machine, Ansible detaches the cloud-init drive and the ISO image, as they are no longer needed.
+- This repository currently targets Proxmox only. Future support for cloud-hypervisor should likely be added as a separate image module/output rather than mixing defaults.
+- The image pins NixOS through `flake.nix`. Update the `nixpkgs` input when moving to a new NixOS release.
+- If your Proxmox storage or network bridge differs from `local-lvm`/`vmbr0`, adjust both the image configuration and Proxmox import commands accordingly.
