@@ -26,8 +26,6 @@
   };
   services.qemuGuest.enable = true;
   services.spice-vdagentd.enable = true;
-  virtualisation.virtualbox.guest.enable = lib.mkIf (pkgs.stdenv.hostPlatform.isx86_64) true; # Quick solution as VirtualBox doesn't support ARM
-  virtualisation.hypervGuest.enable = true;
 
   # For convenience of installation/debugging
   security.sudo.wheelNeedsPassword = false;
