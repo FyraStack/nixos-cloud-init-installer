@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - v*
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version label for the image filename (e.g. v1.0.0-test)"
+        required: false
+        default: "dev"
+        type: string
 
 permissions:
   contents: write
@@ -20,6 +27,14 @@ jobs:
           nix_path: nixpkgs=channel:26.05
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm uid-range
+      - name: Determine version label
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build images
         run: >
           nix run github:nixos/nixpkgs/nixos-unstable#nixos-rebuild --
@@ -27,20 +42,21 @@ jobs:
       - name: Copy and compress qcow2 image
         run: |
           REAL_QCOW2_FILENAME=$(readlink -f $(find result/ -name "nixos-*.qcow2" -print -quit))
-          # Compress with qemu-img — uses zlib, typically shrinks 50-70%
           qemu-img convert -O qcow2 -c "$REAL_QCOW2_FILENAME" \
-            nixos-cloud-init-installer-${{ github.ref_name }}-x86_64.qcow2
+            nixos-cloud-init-installer-${{ steps.version.outputs.version }}-x86_64.qcow2
       - name: Check compressed size
         run: |
-          ls -lh nixos-cloud-init-installer-${{ github.ref_name }}-x86_64.qcow2
+          ls -lh nixos-cloud-init-installer-${{ steps.version.outputs.version }}-x86_64.qcow2
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
           name: qcow2-artifact-x86_64
-          path: nixos-cloud-init-installer-${{ github.ref_name }}-x86_64.qcow2
+          path: nixos-cloud-init-installer-${{ steps.version.outputs.version }}-x86_64.qcow2
   create-release:
     needs: build
     runs-on: ubuntu-latest
+    # Only create a release on tag pushes, not manual runs
+    if: ${{ github.event_name == 'push' }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
