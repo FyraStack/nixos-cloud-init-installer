@@ -23,7 +23,6 @@
   networking.dhcpcd.enable = false;
   services.openssh = {
     enable = true;
-    settings.PermitRootLogin = "prohibit-password";
   };
   services.qemuGuest.enable = true;
   services.spice-vdagentd.enable = true;
