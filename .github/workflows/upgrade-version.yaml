@@ -1,4 +1,4 @@
-name: Upgrade NixOS version 
+name: Upgrade NixOS version
 on:
   workflow_dispatch:
   schedule:
@@ -19,11 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v22
+        uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
       - name: Check Nix flake inputs
-        uses: DeterminateSystems/flake-checker-action@v12
+        uses: DeterminateSystems/flake-checker-action@3164002371bc90729c68af0e24d5aacf20d7c9f6 # v12
         with:
           check-owner: false # We're using non-NixOS inputs here
           check-outdated: false # This is the workflow for updating...
@@ -47,7 +47,7 @@ jobs:
             --arg today "$today_date" \
             '.result.releases[] | select(.releaseDate <= $today) | .name' \
             | head -n 1)
-          
+
           if [[ -z "${latest_release}" ]] ; then
               echo "Error: No NixOS release is available to use for today ($today_date)! Is your time set correctly?" >&2
               exit 1
@@ -76,7 +76,7 @@ jobs:
           # Make sure commits can be made
           git config --local user.email "${{ env.GITHUB_COMMITTER_EMAIL }}"
           git config --local user.name "${{ env.GITHUB_COMMITTER_NAME }}"
-          
+
           # Might as well do all inputs
           nix flake update --commit-lock-file
 
@@ -92,7 +92,7 @@ jobs:
           git reset --soft HEAD~1
         if: env.NIXOS_UPGRADE_AVAILABLE == 'true'
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           commit-message: "upgrade: Change NixOS flake version to ${{ env.LATEST_NIXOS_RELEASE }}"
           branch: "nixos-upgrade-${{ env.LATEST_NIXOS_RELEASE }}"
