@@ -22,10 +22,10 @@ jobs:
       - name: Checkout main branch
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: "Install Nix"
-        uses: cachix/install-nix-action@v31
+        uses: cachix/install-nix-action@a49548c11d9846ad46ecc0115273879b045f001c # v31.10.7
         with:
-          extra-conf: |
-            nixpkgs=channel:26.05
+          nix_path: nixpkgs=channel:26.05
+          extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm uid-range
       - name: Determine version label
         id: version
