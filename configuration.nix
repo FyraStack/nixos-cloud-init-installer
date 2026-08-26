@@ -52,7 +52,14 @@
       "virtio_net"
       "nvme"
       "xhci_pci"
+      "ata_piix"
+      "sr_mod"
     ];
+    kernelModules = [
+      "iso9660"
+      "sr_mod"
+    ];
+    supportedFilesystems = [ "iso9660" ];
   };
 
   networking = {
@@ -60,6 +67,15 @@
     useNetworkd = true;
     useDHCP = false;
     dhcpcd.enable = false;
+    firewall.allowedTCPPorts = [ 22 ];
+  };
+
+  systemd.network.networks."99-dhcp" = {
+    matchConfig.Name = "en* eth*";
+    networkConfig = {
+      DHCP = "ipv4";
+      IPv6AcceptRA = true;
+    };
   };
 
   services = {
@@ -67,18 +83,24 @@
       enable = true;
       network.enable = true;
       settings = {
-        datasource_list = [ "NoCloud" ];
+        datasource_list = [
+          "NoCloud"
+          "ConfigDrive"
+        ];
         disable_root = false;
         ssh_pwauth = true;
         chpasswd.expire = false;
+        users = [ "root" ];
       };
     };
 
     openssh = {
       enable = true;
+      openFirewall = true;
       settings = {
         Include = "/etc/ssh/sshd_config.d/*.conf";
         PasswordAuthentication = lib.mkDefault true;
+        PermitRootLogin = lib.mkDefault "yes";
       };
     };
 
@@ -90,6 +112,12 @@
   systemd.tmpfiles.rules = [
     "d /etc/ssh/sshd_config.d 0755 root root -"
   ];
+
+  environment.etc = {
+    "nixos/configuration.nix".source = ./configuration.nix;
+    "nixos/flake.nix".source = ./flake.nix;
+    "nixos/flake.lock".source = ./flake.lock;
+  };
 
   environment.systemPackages = with pkgs; [
     cloud-init
