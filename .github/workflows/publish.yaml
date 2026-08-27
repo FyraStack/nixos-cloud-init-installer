@@ -28,6 +28,9 @@ jobs:
           nix_path: nixpkgs=channel:26.05
           extra_nix_config: |
             system-features = nixos-test benchmark big-parallel kvm uid-range
+            download-attempts = 10
+            http-connections = 8
+            stalled-download-timeout = 300
       - name: Determine version label
         id: version
         run: |

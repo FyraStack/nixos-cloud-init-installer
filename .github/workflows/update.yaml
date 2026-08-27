@@ -4,7 +4,7 @@ name: Update flake.lock
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 12 * * 0' # Every Sunday at 12:00 PM
+    - cron: "0 12 * * 0" # Every Sunday at 12:00 PM
 
 permissions:
   pull-requests: write
@@ -26,5 +26,9 @@ jobs:
       - name: Update flake.lock
         uses: DeterminateSystems/update-flake-lock@834c491b2ece4de0bbd00d85214bb5e83b4da5c6 # v28
         with:
-          commit-msg: 'bump(lock): Update flake.lock'
-          pr-title: 'bump(lock): Update flake.lock'
+          # FLAKE_UPDATE_TOKEN must be a PAT or GitHub App token with
+          # contents: write and pull requests: write if the repository blocks
+          # the built-in GITHUB_TOKEN from creating pull requests.
+          token: ${{ secrets.FLAKE_UPDATE_TOKEN || github.token }}
+          commit-msg: "bump(lock): Update flake.lock"
+          pr-title: "bump(lock): Update flake.lock"
