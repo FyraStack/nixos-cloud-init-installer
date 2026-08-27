@@ -124,6 +124,6 @@ chpasswd:
 
 ## Notes
 
-- This repository currently targets Proxmox only. Future support for cloud-hypervisor should likely be added as a separate image module/output rather than mixing defaults.
+- This repository currently targets Proxmox only. Future support for cloud-hypervisor will likely be added as a separate image module/output.
 - The image pins NixOS through `flake.nix`. Update the `nixpkgs` input when moving to a new NixOS release.
 - If your Proxmox storage or network bridge differs from `local-lvm`/`vmbr0`, adjust both the image configuration and Proxmox import commands accordingly.
