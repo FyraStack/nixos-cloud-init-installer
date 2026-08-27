@@ -37,9 +37,12 @@
     };
   };
 
+  # Build a small reusable base image. When Proxmox grows the attached disk,
+  # expand the root partition and filesystem during the first boot.
   virtualisation.diskSize = 4096;
 
   boot = {
+    growPartition = true;
     loader.timeout = lib.mkForce 0;
     kernelParams = [
       "console=ttyS0,115200n8"
@@ -61,6 +64,8 @@
     ];
     supportedFilesystems = [ "iso9660" ];
   };
+
+  fileSystems."/".autoResize = true;
 
   networking = {
     usePredictableInterfaceNames = false;

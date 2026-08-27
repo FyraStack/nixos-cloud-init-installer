@@ -81,7 +81,20 @@ qm set 9000 --virtio0 local-lvm:vm-9000-disk-1
 qm set 9000 --boot order=virtio0
 ```
 
-If your provisioning workflow resizes the VM disk after cloning, the image is prepared for that: the Proxmox image module enables partition growth and root filesystem auto-resize on boot.
+The QCOW2 base image is intentionally 4 GiB. After importing or cloning it, the Proxmox virtual disk must be enlarged explicitly; changing the VM's boot or memory settings does not resize storage. For example, to make the OS disk 20 GiB:
+
+```bash
+qm resize 9000 virtio0 20G
+```
+
+The image then expands the final root partition and ext4 filesystem during boot. Verify the result inside the VM with:
+
+```bash
+df -h /
+lsblk
+```
+
+If the VM was already booted before resizing, reboot it after `qm resize`. The image is configured with `boot.growPartition = true` and `fileSystems."/".autoResize = true` so the guest filesystem follows the larger Proxmox disk.
 
 ## Example cloud-init user data
 
@@ -107,7 +120,6 @@ chpasswd:
   users:
     - name: root
       password: "$6$rounds=4096$exampleSalt$replace-with-a-real-sha512-crypt-hash"
-
 ```
 
 ## Notes
